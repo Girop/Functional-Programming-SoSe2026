@@ -17,7 +17,7 @@ parseTime = do
   m <- digitsN 2
   _ <- char ':'
   s <- digitsN 2
-  return (TimeOfDay h m (fromIntegral s))
+  return $ TimeOfDay h m (fromIntegral s)
 
 
 parseDay :: Parser Day
@@ -27,42 +27,40 @@ parseDay = do
   m <- digitsN 2
   _ <- char '-'
   y <- digitsN 4
-  return (fromGregorian (fromIntegral y) m d)
+  return $ fromGregorian (fromIntegral y) m d
 
 
 parseTimestamp :: Parser LocalTime
 parseTimestamp = LocalTime <$> parseDay <* char ' ' <*> parseTime
 
-signedInt :: Parser Int
-signedInt = do
+parseMoney :: Parser Money
+parseMoney = do
     sign   <- option id (char '-' >> return negate)
-    digits <- many1 digit
-    return $ sign (read digits)
+    major <- many1 digit
+    _ <- char '.'
+    minor <- many1 digit
+    return $ sign $ Money (read major) (read minor)
 
-parseFlow :: Parser Flow
-parseFlow = do
-    dirraw <- manyTill anyChar (char ':')
-    dir <- case dirraw of 
-        "Expenses"  -> return Outcoming
-        "Income" -> return Incoming
-        other -> fail ("Unkown money flow direction: " ++ other)
-    category <- manyTill anyChar space
+getAccountNames :: Parser [String]
+getAccountNames = do 
+    segment <- many1 alphaNum
+    rest <- (char ':' >> getAccountNames) <|> return []
+    return $ segment : rest
+
+
+mkAccount :: [String] -> Money -> [Account]
+mkAccount [] _ = []
+mkAccount names balance = [Account (head names) balance subAccount]
+    where  
+        subAccount = mkAccount (tail names) balance
+
+
+parseAccount :: Parser Account
+parseAccount = do
+    names <- getAccountNames
     skipMany1 space
-    change <- signedInt
-    return (Flow dir category change)
-
-
-parseAssets :: Parser Asset
-parseAssets = do
-    assetTypeRaw <- manyTill anyChar (char ':')
-    assetTypeName <- case assetTypeRaw of
-        "Assets" -> return Cash
-        _ -> fail "unexpected asset type"
-    assetName <- manyTill anyChar space
-    skipMany1 space
-    value <- signedInt
-    return (Asset assetTypeName assetName value)
-
+    value <- parseMoney
+    return $ head $ mkAccount names value
 
 parseEntry :: Parser Entry
 parseEntry = do
@@ -70,13 +68,12 @@ parseEntry = do
     skipMany1 space
     title <- manyTill anyChar newline
     skipMany1 space
-    flow <- parseFlow
+    a1 <- parseAccount
     skipMany1 space
-    asset <- parseAssets
+    a2 <- parseAccount
     skipMany space
-    return (Entry tm title flow asset)
+    return $ Entry tm title a1 a2
 
 parseLedger :: String -> String -> Either ParseError Ledger
 parseLedger fileName contents = parse (many parseEntry) fileName contents
-
 

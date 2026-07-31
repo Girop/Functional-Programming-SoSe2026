@@ -73,6 +73,7 @@ executable functional
     build-depends:    base ^>=4.18.3.0
                     , parsec
                     , time
+                    , containers
 
     -- Directories containing source files.
     hs-source-dirs:   app
