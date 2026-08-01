@@ -14,8 +14,9 @@ instance Num Money where
         let minors = min1 + min2
         in Money (maj1 + maj2 + minors `div` 100) (minors `mod` 100)
 
-    -- TODO fail
-    (Money _ _) * (Money _ _) = Money 0 0
+    -- Why would you do that?
+    (Money maj1 min1) * (Money maj2 min2) =
+        (Money 0 0) + (Money (maj1 * maj2) (min1 * min2))
 
     abs (Money maj1 min1) = Money (abs maj1) (abs min1)
 

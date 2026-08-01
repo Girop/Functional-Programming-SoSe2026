@@ -1,41 +1,28 @@
 module Main where
-import Parser (parseLedger)
-import Data.List (partition)
+import Parser (loadLedger)
+import Data.Map (Map, unionWith, insertWith, empty)
+import Data.Time.LocalTime (LocalTime(..))
+import Data.Time.Calendar (dayPeriod)
+import Data.Time.Calendar.Month (Month)
 import Types
 
-mergeAccounts :: Accounts -> Accounts
-mergeAccounts [] = []
-mergeAccounts (a : as) = mkAcc : mergeAccounts rest
+
+monthOf :: LocalTime -> Month
+monthOf = dayPeriod . localDay
+
+expensesPerMonth :: Ledger -> Map (String, Month) Money -> Map (String, Month) Money
+expensesPerMonth [] _ = empty
+expensesPerMonth (entr: entrs) accBalance = expensesPerMonth entrs mergeExpenses
     where
-        (matchingAccs, rest) = partition (\other -> accountName other == accountName a) as
-        summedBalance = foldl (\acc ac -> acc + balance ac) (balance a) matchingAccs
-        mergedSubAccounts = mergeAccounts (subAccounts a ++ concatMap subAccounts matchingAccs)
-        mkAcc = Account (accountName a) summedBalance mergedSubAccounts
-
-
-extractTransactionAccs :: Ledger -> Accounts
-extractTransactionAccs ledger = [accs | x <- ledger, accs <- [acc1 x, acc2 x]]
-
-
-normalizeLedger :: Ledger -> Accounts
-normalizeLedger ledger = mergeAccounts $ extractTransactionAccs ledger
-
-
-consistencyCheck :: Accounts -> Bool
-consistencyCheck accs = sum [balance x | x <- accs] == (Money 0 0)
-
-expensesPerMonth :: Accounts -> Map Month Integer
--- expensesPerMonth accs = -- TODO
-
-displayAccounts :: Accounts -> IO ()
-displayAccounts accounts = -- TODO
+        insertExpense acc = insertWith (+) (accountName acc, monthOf (timestamp entr)) (balance acc) accBalance
+        mergeExpenses = unionWith (+) (insertExpense (acc1 entr)) (insertExpense (acc2 entr))
     
 
 main :: IO ()
 main = do
     let fileName = ".ledger"
     contents <- readFile fileName
-    case parseLedger fileName contents of
+    case loadLedger fileName contents of
          Left err -> print err
-         Right xs -> print $ consistencyCheck $ normalizeLedger xs
+         Right _ -> print "Ledger loaded sucessfully"
 

@@ -1,5 +1,6 @@
-module Parser (parseLedger) where
+module Parser (loadLedger) where
 
+import Data.List (partition)
 import Data.Time.Calendar (Day, fromGregorian)
 import Data.Time.LocalTime (LocalTime (..), TimeOfDay (..))
 import Text.Parsec
@@ -74,6 +75,43 @@ parseEntry = do
     skipMany space
     return $ Entry tm title a1 a2
 
-parseLedger :: String -> String -> Either ParseError Ledger
-parseLedger fileName contents = parse (many parseEntry) fileName contents
+
+mergeAccounts :: Accounts -> Accounts
+mergeAccounts [] = []
+mergeAccounts (a : as) = mkAcc : mergeAccounts rest
+    where
+        (matchingAccs, rest) = partition (\other -> accountName other == accountName a) as
+        summedBalance = foldl (\acc ac -> acc + balance ac) (balance a) matchingAccs
+        mergedSubAccounts = mergeAccounts (subAccounts a ++ concatMap subAccounts matchingAccs)
+        mkAcc = Account (accountName a) summedBalance mergedSubAccounts
+
+
+extractTransactionAccs :: Ledger -> Accounts
+extractTransactionAccs ledger = [accs | x <- ledger, accs <- [acc1 x, acc2 x]]
+
+normalizeLedger :: Ledger -> Accounts
+normalizeLedger ledger = mergeAccounts $ extractTransactionAccs ledger
+
+data LedgerError = ParserError ParseError | ConsistencyErr String deriving Show
+
+consistencyCheck :: Accounts -> Either LedgerError Accounts
+consistencyCheck accs
+        | total == Money 0 0 = Right accs
+        | otherwise = Left $ ConsistencyErr $ "Ledger does not sum to 0, total sum: " ++ show total
+    where
+        total = sum [balance x | x <- accs]
+
+
+parseLedger :: String -> String -> Either LedgerError Ledger
+parseLedger fileName contents = 
+    case parse (many parseEntry) fileName contents of
+         Left err -> Left $ ParserError err
+         Right ledger -> Right ledger
+ 
+
+loadLedger :: String -> String -> Either LedgerError (Ledger, Accounts)
+loadLedger fileName contents = do
+    ledger <- parseLedger fileName contents
+    accounts <- consistencyCheck $ normalizeLedger ledger
+    return (ledger, accounts)
 
