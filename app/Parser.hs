@@ -89,11 +89,12 @@ mergeAccounts (a : as) = mkAcc : mergeAccounts rest
 extractTransactionAccs :: Ledger -> Accounts
 extractTransactionAccs ledger = [accs | x <- ledger, accs <- [acc1 x, acc2 x]]
 
+
 normalizeLedger :: Ledger -> Accounts
 normalizeLedger ledger = mergeAccounts $ extractTransactionAccs ledger
 
-data LedgerError = ParserError ParseError | ConsistencyErr String deriving Show
 
+data LedgerError = ParserError ParseError | ConsistencyErr String deriving Show
 consistencyCheck :: Accounts -> Either LedgerError Accounts
 consistencyCheck accs
         | total == Money 0 0 = Right accs

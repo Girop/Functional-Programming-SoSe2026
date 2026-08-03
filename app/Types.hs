@@ -2,11 +2,14 @@ module Types where
 
 import Data.Time.LocalTime (LocalTime (..))
 
-
 data Money = Money {
         majorUnit :: Integer,
         minorUnit :: Integer
-    } deriving (Show, Eq)
+    } deriving Eq
+
+
+instance Show Money where
+    show (Money major minor) = show major ++ "." ++ show minor
 
 
 instance Num Money where
@@ -32,6 +35,18 @@ data Account = Account {
         balance :: Money,
         subAccounts :: [Account]
     } deriving (Show, Eq)
+
+
+
+-- TODO: Account -> [String]
+fullAccountName :: Account -> String
+fullAccountName acc 
+    | null (subAccounts acc) = thisName
+    | otherwise = thisName ++ ":" ++ subName acc
+    where
+        thisName = accountName acc
+        subName = fullAccountName . head . subAccounts
+
 
 data Entry = Entry { 
         timestamp :: LocalTime,
