@@ -64,7 +64,8 @@ executable functional
     -- Modules included in this executable, other than Main.
     other-modules:    Parser
                     , Types
-                    , Serialize
+                    , Queries
+                    , Args
                 
 
     -- LANGUAGE extensions used by modules in this package.

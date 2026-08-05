@@ -1,93 +1,89 @@
 module Main where
-import System.Environment
+import Data.List (intercalate)
+import Data.Maybe
 import Parser (loadLedger)
-import qualified Data.Map as Map
-import Data.Maybe 
-import Data.Map (Map)
-import Data.List (foldl', isPrefixOf)
-import Data.Time.LocalTime (LocalTime(..))
-import Data.Time.Calendar (dayPeriod)
-import Data.Time.Calendar.Month (Month)
+import Queries
+import System.Environment
 import Types
-
-
-monthOf :: LocalTime -> Month
-monthOf = dayPeriod . localDay
-
-categoryPerMonth :: Ledger -> Map (String, Month) Money -> Map (String, Month) Money
-categoryPerMonth entries initialBalance = foldl' step initialBalance entries
-    where
-        step accBalance entr = insertExpense (acc1 entr) (insertExpense (acc2 entr) accBalance)
-            where
-                insertExpense acc = Map.insertWith (+) (accountName acc, monthOf (timestamp entr)) (balance acc)
-
-
-expensePerMonth :: Ledger -> [(Month, Money)]
-expensePerMonth ledger =
-        [(month, value) | ((_, month), value) <- filter (\((c, _), _) -> isPrefixOf "Expenses" c) categories]
-    where
-        categories = Map.toList $ categoryPerMonth ledger Map.empty
-
-
-printExpensesPerMonth :: Ledger -> IO ()
-printExpensesPerMonth ledger =
-     putStrLn "Expenses per month: " >> mapM_ printEntry (expensePerMonth ledger)
-  where
-    printEntry (month, value) = putStrLn (show month ++ ": " ++ show value)
-
-data PresentationMode = CSV | Console 
-    deriving Show
-
-data Flags
-    = ShowExpensesPerMonth -- | -eM flag
-    | ShowExpensesPerYear -- | -eY flag
-    | TotalSpendingOn String -- | -t
-    | CompareIncomeAndExpenses -- | -incomeExpense
-    | AccountBalanceOverMonths -- | -bM
-    | AccountBalanceOverYears -- | -bY
-    | ShowTansactionsBetween LocalTime LocalTime -- TODO
-    deriving Show
-
-data ProgContext = ProgContext {
-        progFlags :: [Flags],
-        ledgerLoc :: String,
-        presentationMode :: PresentationMode
-    } deriving Show
-
-
-processFlags :: [String] -> [Flags]
-processFlags [] = []
-processFlags (a:args) 
-    | a == "-eM" = ShowExpensesPerMonth : processFlags args
-    | a == "-eY" = ShowExpensesPerYear : processFlags args
-    | a == "-t" = TotalSpendingOn (head args) : processFlags (tail args)
-    | a == "-incomeExpense" = CompareIncomeAndExpenses : processFlags args
-    | a == "-bM" = AccountBalanceOverMonths : processFlags args
-    | a == "-bY" = AccountBalanceOverYears : processFlags args
-    | otherwise = error ("Unkown argument: " ++ a)
+import Args
 
 
 lookupLedgerLocation :: IO String
 lookupLedgerLocation =
-    unwrap <$> lookupEnv "LEDGER_FILE"
-    where
-        unwrap = Data.Maybe.fromMaybe ".ledger"
+  unwrap <$> lookupEnv "LEDGER_FILE"
+  where
+    unwrap = Data.Maybe.fromMaybe ".ledger"
 
 
 prepareProg :: IO ProgContext
 prepareProg = do
-    loc <- lookupLedgerLocation
-    args <- getArgs
-    let flags = processFlags args
-    return (ProgContext flags loc Console)
+  loc <- lookupLedgerLocation
+  args <- getArgs
+  let flags = processFlags args
+  return $ ProgContext flags loc
+
+
+query :: QueryFlag -> Ledger -> QueryResult
+query ShowExpensesPerMonth = expensePerMonthQuery
+query ShowExpensesPerYear = expensePerYearQuery
+query AccountBalanceOverMonths = balanceOverMonthsQuery
+query AccountBalanceOverYears = balanceOverYearsQuery
+query AccountBalanceNow = balanceNowQuery
+query (TotalSpendingOn name) = totalSpendingOnQuery name
+
+
+runQueries :: [Flag] -> Ledger -> [QueryResult]
+runQueries flags ledger = query' (foldl filteredLedger ledger flags) (getQueries flags)
+  where
+    filteredLedger ledger' f
+        | FF (TransactionsBetween d0 d1) <- f = restrictTimeRange d0 d1 ledger'
+        | otherwise = ledger
+    query' ledger' (f:fs) = query f ledger' : query' ledger' fs
+    query' _ [] = []
+
+dumpSingleCSV :: String -> QueryResult -> IO ()
+dumpSingleCSV filename q = writeFile filename (header ++ "\n" ++ body)
+  where
+    header = intercalate "," (queryHeader q)
+    body = intercalate "\n" $ intercalate "," <$> queryBody q
+
+
+dumpToCsv :: [QueryResult] -> IO ()
+dumpToCsv qs = mapM_ (uncurry dumpSingleCSV) (zip csvFilenames qs)
+  where
+    csvFilenames = ["query_result" ++ show idx ++ ".csv" | idx <- [0 :: Integer ..]]
+
+
+dumpToConsole :: [QueryResult] -> IO ()
+dumpToConsole = mapM_ printQueryResult
+  where
+    printQueryResult q = do
+        let hd = "|" ++ intercalate " | " (queryHeader q) ++ "|"
+        let bar = replicate (length hd) '-'
+        putStrLn bar
+        putStrLn hd
+        putStrLn bar
+        putStrLn $ intercalate "|\n" $ intercalate " | " <$> queryBody q
+        putStrLn "\n"
+
+
+runProgram :: ProgContext -> Ledger -> Accounts -> IO ()
+runProgram ctxt ledger _ = do
+    let qs = runQueries (progFlags ctxt) ledger
+    let ps = getPresentationMode (progFlags ctxt)
+    matchMode ps qs
+    where
+        matchMode [] _ = return ()
+        matchMode (p:ps) qs' = case p of 
+            CSVMode -> dumpToCsv qs' >> matchMode ps qs'
+            ConsoleMode -> dumpToConsole qs' >> matchMode ps qs'
 
 
 main :: IO ()
 main = do
-    context <- prepareProg
-    let fileName = ledgerLoc context
-    contents <- readFile fileName
-    case loadLedger fileName contents of
-         Left err -> print err
-         Right (ledger, _) -> print context
-
+  context <- prepareProg
+  let fileName = ledgerLoc context
+  contents <- readFile fileName
+  case loadLedger fileName contents of
+    Left err -> putStrLn "While loading the ledger, following error occured:" >> print err
+    Right (ledger, accounts) -> runProgram context ledger accounts

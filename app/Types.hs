@@ -18,8 +18,7 @@ instance Num Money where
         in Money (maj1 + maj2 + minors `div` 100) (minors `mod` 100)
 
     -- Why would you do that?
-    (Money maj1 min1) * (Money maj2 min2) =
-        (Money 0 0) + (Money (maj1 * maj2) (min1 * min2))
+    (Money maj1 min1) * (Money maj2 min2) = Money 0 0 + Money (maj1 * maj2) (min1 * min2)
 
     abs (Money maj1 min1) = Money (abs maj1) (abs min1)
 
@@ -35,7 +34,6 @@ data Account = Account {
         balance :: Money,
         subAccounts :: [Account]
     } deriving (Show, Eq)
-
 
 
 -- TODO: Account -> [String]
