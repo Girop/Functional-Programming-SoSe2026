@@ -29,7 +29,6 @@ query ShowExpensesPerYear = expensePerYearQuery
 query AccountBalanceOverMonths = balanceOverMonthsQuery
 query AccountBalanceOverYears = balanceOverYearsQuery
 query AccountBalanceNow = balanceNowQuery
-query (TotalSpendingOn name) = totalSpendingOnQuery name
 
 
 runQueries :: [Flag] -> Ledger -> [QueryResult]
@@ -85,5 +84,5 @@ main = do
   let fileName = ledgerLoc context
   contents <- readFile fileName
   case loadLedger fileName contents of
-    Left err -> putStrLn "While loading the ledger, following error occured:" >> print err
+    Left err -> putStrLn "While loading the ledger, following error occured: " >> print err
     Right (ledger, accounts) -> runProgram context ledger accounts

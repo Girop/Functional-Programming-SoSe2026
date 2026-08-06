@@ -6,7 +6,6 @@ module Queries (
     balanceOverMonthsQuery,
     balanceOverYearsQuery,
     balanceNowQuery,
-    totalSpendingOnQuery,
     normalizeLedger
 ) where
 import Data.Time.LocalTime (LocalTime(..))
@@ -24,9 +23,9 @@ mergeAccounts [] = []
 mergeAccounts (a : as) = mkAcc : mergeAccounts rest
     where
         (matchingAccs, rest) = partition (\other -> accountName other == accountName a) as
-        summedBalance = foldl (\acc ac -> acc + balance ac) (balance a) matchingAccs
+        accBalance = foldl' (\acc ac -> acc + balance ac) (balance a) matchingAccs
         mergedSubAccounts = mergeAccounts (subAccounts a ++ concatMap subAccounts matchingAccs)
-        mkAcc = Account (accountName a) summedBalance mergedSubAccounts
+        mkAcc = Account (accountName a) accBalance mergedSubAccounts
 
 
 extractTransactionAccs :: Ledger -> Accounts
@@ -107,7 +106,7 @@ timeperiodEntries :: Ord a => (LocalTime -> a) -> Ledger -> [(a, Ledger)]
 timeperiodEntries timeSelector l = Map.toList $ groupBySelector (timeSelector . timestamp) l
 
 
-balanceOverTimePeriod :: Show a => Ord a => (LocalTime -> a) -> Ledger -> QueryResult
+balanceOverTimePeriod :: (Show a, Ord a) => (LocalTime -> a) -> Ledger -> QueryResult
 balanceOverTimePeriod selector l = QueryResult h b
     where 
         h = ["Time", "Account", "Balance"]
@@ -123,11 +122,9 @@ balanceOverYearsQuery :: Ledger -> QueryResult
 balanceOverYearsQuery = balanceOverTimePeriod yearOf
 
 
--- TODO
 balanceNowQuery :: Ledger -> QueryResult
-balanceNowQuery _ = QueryResult [] []
-
--- TODO
-totalSpendingOnQuery :: String -> Ledger -> QueryResult
-totalSpendingOnQuery _ _ = QueryResult [] []
+balanceNowQuery l = QueryResult h b
+    where
+        h = ["Account", "Balance"]
+        b = [[accountName a, show (balance a)] | a <- normalizeLedger l ]
 

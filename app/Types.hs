@@ -36,7 +36,6 @@ data Account = Account {
     } deriving (Show, Eq)
 
 
--- TODO: Account -> [String]
 fullAccountName :: Account -> String
 fullAccountName acc 
     | null (subAccounts acc) = thisName

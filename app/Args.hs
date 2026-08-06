@@ -8,6 +8,7 @@ import Data.List (nub)
 data PresentationMode = CSVMode | ConsoleMode
   deriving (Show, Eq)
 
+
 data QueryFlag
   = ShowExpensesPerMonth
   | -- | -eM
@@ -17,11 +18,8 @@ data QueryFlag
   | -- | -bM
     AccountBalanceOverYears
   | -- | -bY
-    AccountBalanceNow
-  | -- | -bN
-    TotalSpendingOn String
-  deriving (-- | -total
-            Show, Eq)
+    AccountBalanceNow -- | -bN
+  deriving ( Show, Eq)
 
 data FilterFlags = TransactionsBetween Day Day
   deriving (-- | -t 02-01-2026 10-01-2026
@@ -62,7 +60,6 @@ processQueryFlags (a : args)
   | a == "-bM" = AccountBalanceOverMonths : processQueryFlags args
   | a == "-bY" = AccountBalanceOverYears : processQueryFlags args
   | a == "-bN" = AccountBalanceNow : processQueryFlags args
-  | a == "-total" = TotalSpendingOn (head args) : processQueryFlags (tail args)
   | otherwise = processQueryFlags args
 
 parseArgDay :: String -> Day
@@ -86,6 +83,6 @@ processModeFlags (a : args)
 processFlags :: [String] -> [Flag]
 processFlags args = (QF <$> processQueryFlags args) ++ (FF <$> processFilterFlags args) ++ presModes
     where 
-        presModes = let modes = nub (PM <$> processModeFlags args) in if null modes then [PM ConsoleMode] else modes
+        presModes = let modes = nub (PM <$> processModeFlags args) in
+            if null modes then [PM ConsoleMode] else modes
         
-
