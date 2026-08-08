@@ -16,7 +16,7 @@ module Queries
   )
 where
 
-import Data.List (foldl', isPrefixOf, partition)
+import Data.List (foldl', isPrefixOf, partition, sortOn)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Time.Calendar (Day, dayPeriod, toGregorian)
@@ -51,6 +51,12 @@ normalizeLedger ledger = mergeAccounts [accs | x <- ledger, accs <- [acc1 x, acc
 -- | Filter out all values which do not fall into the specified range
 restrictTimeRange :: Day -> Day -> Ledger -> Ledger
 restrictTimeRange d1 d2 = filter (\e -> let d0 = localDay (timestamp e) in d1 <= d0 && d0 <= d2)
+
+-- restrictAccountNames :: [String] -> Ledger -> Ledger
+-- restrictAccountNames names = filter ()
+--   where
+--     contains n = any (`elem` n) names
+--     combineNames e = [accountName (acc1 e), accountName (acc2 e)]
 
 -- | Helper month accessor
 monthOf :: LocalTime -> Month
@@ -107,8 +113,9 @@ balanceOverTimePeriod :: (Show a, Ord a) => (LocalTime -> a) -> Ledger -> QueryR
 balanceOverTimePeriod selector l = QueryResult h b
   where
     h = ["Time", "Account", "Balance"]
-    b = [[show tm, name, show money] | (tm, name, money) <- grouped]
-    grouped = [(t, accountName a, balance a) | (t, es) <- timeperiodEntries selector l, a <- normalizeLedger es]
+    periods = sortOn fst (timeperiodEntries selector l)
+    cumulativePeriods = scanl1 (\(_, es1) (t2, es2) -> (t2, es1 ++ es2)) periods
+    b = [[show t, accountName a, show (balance a)] | (t, es) <- cumulativePeriods, a <- normalizeLedger es]
 
 balanceOverMonthsQuery :: Ledger -> QueryResult
 balanceOverMonthsQuery = balanceOverTimePeriod monthOf
